@@ -1,0 +1,25 @@
+name: CorrectSplineSlicerResults
+display_name: Correction Boundary detection
+contributions:
+  commands:
+    - id: CorrectSplineSlicerResults.make_ResultViewer
+      python_name: correctsplineslicerresults._widget:QtResultsViewer
+      title: Make example QWidget
+    - id: CorrectSplineSlicerResults.make_UpdatedMeasurementWidget
+      python_name: correctsplineslicerresults._widget:QtUpdatedRotation
+      title: Make example QWidget 
+    - id: CorrectSplineSlicerResults.make_RotationWidget
+      python_name: correctsplineslicerresults._widget:QtRotationWidget
+      title: Make example QWidget 
+    - id: CorrectSplineSlicerResults.make_MeasurementWidget
+      python_name: correctsplineslicerresults._widget:QtUpdatedMeasurements
+      title: Make example QWidget 
+  widgets:
+    - command: CorrectSplineSlicerResults.make_ResultViewer
+      display_name: Correct SplineSlicer Results
+    - command: CorrectSplineSlicerResults.make_UpdatedMeasurementWidget
+      display_name: Updated Rotation 
+    - command: CorrectSplineSlicerResults.make_RotationWidget
+      display_name: Correct Rotation
+    - command: CorrectSplineSlicerResults.make_MeasurementWidget
+      display_name: Updated Measurement 
