@@ -2,6 +2,9 @@ name: CorrectSplineSlicerResults
 display_name: Correction Boundary detection
 contributions:
   commands:
+    - id: CorrectSplineSlicerResults.make_QtImageSliceWidget
+      python_name: correctsplineslicerresults._widget:QtImageSliceWidget
+      title: Make example QWidget
     - id: CorrectSplineSlicerResults.make_ResultViewer
       python_name: correctsplineslicerresults._widget:QtResultsViewer
       title: Make example QWidget
@@ -15,6 +18,8 @@ contributions:
       python_name: correctsplineslicerresults._widget:QtUpdatedMeasurements
       title: Make example QWidget 
   widgets:
+    - command: CorrectSplineSlicerResults.make_QtImageSliceWidget
+      display_name: make_QtImageSliceWidget widget
     - command: CorrectSplineSlicerResults.make_ResultViewer
       display_name: Correct SplineSlicer Results
     - command: CorrectSplineSlicerResults.make_UpdatedMeasurementWidget

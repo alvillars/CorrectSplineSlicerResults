@@ -19,7 +19,7 @@ from qtpy.QtWidgets import QComboBox, QVBoxLayout, QWidget, QPushButton
 from skimage.transform import rotate
 from superqt.sliders import QLabeledSlider
 from skimage.transform import rotate
-from .NT_splineslicer_functions import calculate_slice_rotations, calculate_slice_rotations, method_2, find_edge_percent_max
+from .NT_splineslicer_functions import calculate_slice_rotations,  method_2, find_edge_percent_max
 # from splineslicer.skeleton.binarize import _binarize_image_mg
 import splineslicer
 from superqt.collapsible import QCollapsible
@@ -85,6 +85,7 @@ class QtImageSliceWidget(QWidget):
         )
         self.plot_widget.addItem(self.plot_slice_line)
 
+        # create ventral slider
         self.ventral_slider = QLabeledSlider(Qt.Orientation.Horizontal)
         self.ventral_slider.setRange(0, 99)
         self.ventral_slider.setSliderPosition(50)
@@ -92,6 +93,7 @@ class QtImageSliceWidget(QWidget):
         self.ventral_slider.setTickInterval(1)
         self.ventral_slider.valueChanged.connect(self._move_boundary_with_slider)
 
+        # create dorsal slider
         self.dorsal_slider = QLabeledSlider(Qt.Orientation.Horizontal)
         self.dorsal_slider.setRange(0, 99)
         self.dorsal_slider.setSliderPosition(50)
@@ -99,9 +101,15 @@ class QtImageSliceWidget(QWidget):
         self.dorsal_slider.setTickInterval(1)
         self.dorsal_slider.valueChanged.connect(self._move_boundary_with_slider)
 
+        # create None push button 
+        self.Null_widget = QPushButton(text='No boundary')
+        self.Null_widget.clicked.connect(self._remove_boundary_on_click)
+
+        # create update push button
         self.update_widget = QPushButton(text='update')
         self.update_widget.clicked.connect(self._update_on_click)
 
+        # create save push button
         self.save_widget = QPushButton(text='save')
         self.save_widget.clicked.connect(self._save_on_click)
 
@@ -114,11 +122,40 @@ class QtImageSliceWidget(QWidget):
         self.layout().addWidget(self.ventral_slider)
         self.layout().addWidget(self.dorsal_slider)
         self.layout().addWidget(self.update_widget)
+        self.layout().addWidget(self.Null_widget)
         self.layout().addWidget(self.save_widget)
+
+    def _remove_boundary_on_click(self, event=None):
+        # get index values from updated sliders
+        current_slice_index = int(self.slice_slider.value())
+
+        # select line of interest in the result file
+        res,ind = np.unique(self.results_table["target"], return_index=True)
+        target_names_result_table = res[np.argsort(ind)]
+        target_name = target_names_result_table[self.current_channel_index]
+        self.slice_row = self.results_table.loc[
+            (self.results_table["target"] == target_name) &
+            (self.results_table["slice_index"] == current_slice_index)
+        ]
+        
+        # update column of that row according to slider position
+        self.slice_row["ventral_boundary_px"].values[0] = -1
+        self.slice_row["dorsal_boundary_px"].values[0] = -1
+        self.slice_row["ventral_boundary_um"].values[0] =  -1
+        self.slice_row["dorsal_boundary_um"].values[0] =  -1
+        self.slice_row["ventral_boundary_rel"].values[0] =  -1
+        self.slice_row["dorsal_boundary_rel"].values[0] =  -1
+
+        self.results_table.loc[
+            (self.results_table["target"] == target_name) &
+            (self.results_table["slice_index"] == current_slice_index)
+        ] = self.slice_row
 
     def _save_on_click(self, event=None):
         res_path = str(self.results_table_path)
+        print('saving')
         self.results_table.to_csv(res_path[0:-4]+'_corrected.csv')
+        print('saved')
 
     def _update_on_click(self, event=None):
         # get index values from updated sliders
