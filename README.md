@@ -10,6 +10,10 @@
 allows to correct the boundary detection from the SplineSlicer
 
 ----------------------------------
+This napari pluggin was developped as an add-on to splineslicer https://github.com/kevinyamauchi/splineslicer/tree/main from Kevin Yamauchi. 
+It is meant to help correcting the results from the boundary detection of splineslicer. Also it improves the rotation during the alignment of the slices and provide an additional way to further correct the rotation before calling the measurements. 
+
+
 
 This [napari] plugin was generated with [Cookiecutter] using [@napari]'s [cookiecutter-napari-plugin] template.
 
