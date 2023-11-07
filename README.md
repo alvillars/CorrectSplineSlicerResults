@@ -31,10 +31,14 @@ then:
     pip install "napari[all]"
     pip install git+https://github.com/kevinyamauchi/splineslicer.git
 
+if you need to update:
+
+    conda activate splineslicer
+    
+    pip install --upgrade git+https://github.com/kevinyamauchi/splineslicer.git
 
 
-
-You can install `CorrectSplineSlicerResults` via [pip]:
+Then You can install `CorrectSplineSlicerResults` via [pip]:
 
     pip install CorrectSplineSlicerResults
 
