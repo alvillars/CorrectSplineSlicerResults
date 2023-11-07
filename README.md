@@ -26,7 +26,8 @@ https://napari.org/stable/plugins/index.html
 First create an environment `conda create -n splineslicer python=3.8`
 
 then:
-    conda activate splineslicer
+    `conda activate splineslicer`
+    
     pip install "napari[all]"
     pip install git+https://github.com/kevinyamauchi/splineslicer.git
 
