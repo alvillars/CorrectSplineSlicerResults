@@ -200,7 +200,6 @@ def method_2(raw_slice, nt_seg_slice, half_width):
 
     summed_profile = sample_region.sum(axis=0)
 
-
     # correct for columns with no nt labels
     n_sample_rows = nt_seg_slice[row_min:row_max, col_min:col_max].sum(axis=0)
     no_nt_indices = np.argwhere(n_sample_rows == 0)
@@ -231,7 +230,7 @@ def find_boundaries(
     for nt_seg_slice, raw_slice in zip(seg_im, stain_im):
 
         # normalize the intensity by the number of nt pixels in the column
-        raw_profile, raw_crop, col_min, col_max = method_2(raw_slice, nt_seg_slice, half_width, )
+        raw_profile, raw_crop, col_min, col_max = method_1(raw_slice, nt_seg_slice, half_width, )
 
         bg_sample_center = int(bg_sample_pos * (col_max - col_min))
         bg_sample_min = bg_sample_center - bg_half_width
@@ -301,7 +300,7 @@ def find_boundaries_method2(
         half_width: float = 0.5,
         edge_method: BoundaryModes = BoundaryModes.PERCENT_MAX,
         edge_value: float = 0.1,
-        upper_range: float = 0.7,
+        upper_range: float = 1,
         lower_range: float = 0,
 ):
     print('edge method from function :', edge_method)

@@ -24,6 +24,7 @@ from .NT_splineslicer_functions import calculate_slice_rotations,  method_2, fin
 import splineslicer
 from superqt.collapsible import QCollapsible
 from geomdl import exchange, operations
+import re
 
 if TYPE_CHECKING:
     import napari
@@ -76,8 +77,8 @@ class QtImageSliceWidget(QWidget):
         self.image_widget.addItem(self.nt_dorsal_position)
 
         # create the plot
-        self.plot_column_selector = QComboBox()
-        self.plot_column_selector.currentIndexChanged.connect(self._update_plot)
+        # self.plot_column_selector = QComboBox()
+        # self.plot_column_selector.currentIndexChanged.connect(self._update_plot)
         self.plot_widget = pg.PlotWidget(parent=self)
         self.plot_slice_line = pg.InfiniteLine(
             angle=90,
@@ -231,16 +232,15 @@ class QtImageSliceWidget(QWidget):
             self.nt_ventral_position.setVisible(False)
             self.nt_dorsal_position.setVisible(False)
 
-
     def _update_image(self, slice_index: int):
         # offset the slice index since we only have a subset of the slices
         if self.image_slices is None:
             # if images haven't been set yet, do nothing
             return
-
-        offset_slice_index = slice_index - self.min_slice
-        upper_bound = np.shape(self.image_slices)[2]//2 + 20
-        lower_bound = np.shape(self.image_slices)[2]//2 - 20
+        # self.min_slice = min(self.results_table["slice_index"].values)
+        offset_slice_index = slice_index #- self.min_slice
+        upper_bound = np.shape(self.image_slices)[2]//2 + 30
+        lower_bound = np.shape(self.image_slices)[2]//2 - 30
         image_slice = self.image_slices[self.current_channel_index, offset_slice_index, lower_bound:upper_bound, self.start_nt:self.end_nt]
 
         # update the image slice
@@ -300,9 +300,9 @@ class QtImageSliceWidget(QWidget):
         self.results_table_path = results_table_path
 
         # update the plot-able columns
-        column_names = list(self.results_table.columns.values)
-        self.plot_column_selector.clear()
-        self.plot_column_selector.addItems(column_names)
+        # column_names = list(self.results_table.columns.values)
+        # self.plot_column_selector.clear()
+        # self.plot_column_selector.addItems(column_names)
 
         # add the image channels
         if stain_channel_names is not None:
@@ -482,11 +482,23 @@ class QtUpdatedRotation(QWidget):
         )
         self._rotate_widget.reset_choices()
 
+        # create the saving button to save rotation
+        self.save_rotation_widget = magicgui(
+            self._save_rotation,
+            output_path={
+                'label': 'select saving path',
+                'widget_type': 'FileEdit', 'mode': 'd',
+                'filter': ''
+            },
+            call_button='save rotation'
+        )
+
         # set the layout
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.load_data_widget.native)
         self.layout().addWidget(self._binarize_section)
         self.layout().addWidget(self._rotate_section)
+        self.layout().addWidget(self.save_rotation_widget.native)
 
     def _binarize_segmentation(self, threshold: float = 0.5, closing_size: int = 3) -> "napari.types.LayerDataTuple":
         im_seg = self._viewer.layers.selection.active.data
@@ -528,7 +540,23 @@ class QtUpdatedRotation(QWidget):
     def _get_image_layers(self, combo_widget) -> List[Image]:
         """Get a list of Image layers in the viewer"""
         return [layer for layer in self._viewer.layers if isinstance(layer, Image)]
-
+    
+    def _save_rotation(self,
+        output_path: str = ""):
+        loaded_file = self.load_data_widget.sliced_image_path
+        # print(re.match("([\w\d_\.]+\.[\w\d]+)[^\\]", str(loaded_file.value)))
+        fname = str(loaded_file.value).split('\\')[-1]
+        print(fname)
+        output_path=str(output_path)+'/'+fname.replace('.h5','_after_rotation.h5')
+        print(output_path)
+        with h5py.File(output_path,'w') as f_out:
+            f_out.create_dataset(
+            'sliced_stack_rotated',
+            self._viewer.layers.selection.active.data.shape,
+            data=self._viewer.layers.selection.active.data,
+            compression='gzip'
+        )
+        
 class QtRotationWidget(QWidget):
     def __init__(self, napari_viewer: napari.Viewer):
         super().__init__()
@@ -549,26 +577,43 @@ class QtRotationWidget(QWidget):
         self.current_step = self._viewer.dims.current_step[1]
         self._viewer.dims.events.current_step.connect(self._update_slider)
 
+        # create apply push button 
+        self.apply_button = QPushButton(text='apply rotation')
+        self.apply_button.clicked.connect(self._apply_button)
+
+        
+
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.rotate_slider)
+        self.layout().addWidget(self.apply_button)
 
     def _update_slider(self, event=None):
         self.rotate_slider.setSliderPosition(0)
         self.make_copy = 0
+        self.check_angle = 0
 
-    def _on_rotate_slider_moved(self):
-        original_layer = self._viewer.layers.selection.active.data
-        angle = int(self.rotate_slider.value()) #- self.check_angle
-        # self.check_angle = angle
+    def _on_rotate_slider_moved(self, event=None):
+        self.check_angle = int(self.rotate_slider.value())
         #is of form (2,50,150,150) where (channel, slice, x, y) and I want to change the rotation for all channel at one slice
         if self.make_copy == 0:
             self.ind = self._viewer.dims.current_step[1]
-            self.current_slice = original_layer[:,self.ind,...]
-        self.make_copy = 1
+            self.current_slice = self._viewer.layers.selection.active.data[:,self.ind,...].copy()
+            self.make_copy = 1
         
         for i, chan in enumerate(self._viewer.layers.selection.active.data[:,self.ind,...]):
-            self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], angle, resize=False)
+            if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]:
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False, preserve_range=True)
+            else:
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 1, resize=False, preserve_range=True)
         self._viewer.layers.selection.active.refresh()
+
+    def _apply_button(self, event=None):
+        self.current_slice = self._viewer.layers.selection.active.data[:,self.ind,...]
+        for i, chan in enumerate(self._viewer.layers.selection.active.data[:,self.ind,...]):
+            if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]:
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False, preserve_range=True)
+            else:
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 1, resize=False, preserve_range=True)
 
 class QtUpdatedMeasurements(QWidget):
     def __init__(self, napari_viewer: napari.Viewer):
@@ -589,9 +634,10 @@ class QtUpdatedMeasurements(QWidget):
         self._update_widget = magicgui(
             update_metadata,
             image_layer={'choices': self._get_image_layers},
-            channel_0={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7']},
-            channel_1={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7']},
-            channel_2={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7']},
+            channel_0={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
+            channel_1={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
+            channel_2={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
+            channel_3={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
             call_button='update metadata with channel names'
         )
         self._update_section.addWidget(self._update_widget.native)
@@ -608,7 +654,7 @@ class QtUpdatedMeasurements(QWidget):
         self._measure_widget = magicgui(
             measure_boundaries,
             image_layer={'choices': self._get_image_layers},
-            segmentation_layer={"choices": [0, 1, 2, 3]},
+            segmentation_layer={"choices": [0, 1, 2, 3, 4]},
             spline_file_path={'widget_type': 'FileEdit', 'mode': 'r', 'filter': '*.json'},
             table_output_path={'widget_type': 'FileEdit', 'mode': 'w', 'filter': '*.csv'},
             aligned_slices_output_path={'widget_type': 'FileEdit', 'mode': 'w', 'filter': '*.h5'},
@@ -622,7 +668,6 @@ class QtUpdatedMeasurements(QWidget):
             self._measure_widget.reset_choices
         )
         self._measure_widget.reset_choices()
-
 
         # set the layout
         self.setLayout(QVBoxLayout())
@@ -653,9 +698,14 @@ def update_metadata(
     image_layer: Image,
     channel_0: str,
     channel_1: str,
-    channel_2: str
+    channel_2: str,
+    channel_3: Optional[str] = None
 ):
-    stain_channel_names = [channel_0, channel_1, channel_2, 'segmentation']
+    if channel_3 is None:
+        stain_channel_names = [channel_0, channel_1, channel_2, 'segmentation']
+    else: 
+        stain_channel_names = [channel_0, channel_1, channel_2, channel_3, 'segmentation']
+
     image_metadata =  image_layer.metadata
     image_metadata.update({"channel_names": stain_channel_names})
     print(image_metadata)
@@ -663,15 +713,32 @@ def update_metadata(
 def new_align_rotate(
         mask_layer: Image,
         stain_layer: Image,
+        start_slice: Optional[int] = None,
+        end_slice: Optional[int] = None,
         NT_segmentation_index: int=0,
         background_index: int=0,
+        invert_rotation: bool = False
         ) -> "napari.types.LayerDataTuple":
-    rotations, line_scans, orientations, pos, adapted_rotations = calculate_slice_rotations(mask_layer.data[NT_segmentation_index,...]
-                                                                        ,mask_layer.data[background_index,...], p=0.6)
+    
+    print(mask_layer.data.shape)
+    if start_slice is None:
+        start_slice = 0
+    if end_slice is None:
+        end_slice = mask_layer.data.shape[0]
+
+    rotations, line_scans, orientations, pos, adapted_rotations = calculate_slice_rotations(mask_layer.data[NT_segmentation_index,start_slice:end_slice,...]
+                                                                        ,mask_layer.data[background_index,start_slice:end_slice,...], p=0.6)
+    
+    print(invert_rotation)
+    if invert_rotation is True:
+        adapted_rotations = np.asarray(adapted_rotations) + 180
+    else:
+        adapted_rotations = np.asarray(adapted_rotations)
+
     # rotate the segmentation
-    rotated_seg = splineslicer.measure.align_slices.rotate_stack(mask_layer.data[NT_segmentation_index,...], adapted_rotations)
+    rotated_seg = splineslicer.measure.align_slices.rotate_stack(mask_layer.data[NT_segmentation_index,start_slice:end_slice,...], adapted_rotations)
     rotated_stack_adapted = []
-    for i, chan in enumerate(stain_layer.data):
+    for i, chan in enumerate(stain_layer.data[:,start_slice:end_slice,...]):
         rotated_stack_adapted.append(splineslicer.measure.align_slices.rotate_stack(np.asarray(chan), adapted_rotations))
     
     # if no NT segmented or multiple segmented elements are found then the slice is not taken and axis 1 (nb of slices)
@@ -689,13 +756,13 @@ def measure_boundaries(
         spline_file_path: str,
         table_output_path: str,
         aligned_slices_output_path: str,
-        half_width: int = 10,
+        half_width: float = 0.5,
         bg_sample_pos: float = 0.7,
         bg_half_width: int = 2,
         edge_method: BoundaryModes = BoundaryModes.PERCENT_MAX,
-        edge_value: float = 0.1,
+        edge_value: float = 0.5,
         pixel_size_um: float = 5.79,
-        upper_range: float = 0.7,
+        upper_range: float = 1,
         lower_range: float = 0,
         start_slice: int = 0,
         end_slice: int = 99
@@ -812,7 +879,7 @@ def find_boundaries_method2(
         half_width: float = 0.5,
         edge_method: BoundaryModes = BoundaryModes.PERCENT_MAX,
         edge_value: float = 0.1,
-        upper_range: float = 0.7,
+        upper_range: float = 1,
         lower_range: float = 0,
 ):
     ventral_boundary = []
