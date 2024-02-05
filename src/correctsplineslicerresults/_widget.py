@@ -25,7 +25,7 @@ import splineslicer
 from superqt.collapsible import QCollapsible
 from geomdl import exchange, operations
 import re
-
+from splineslicer._reader import napari_get_reader
 if TYPE_CHECKING:
     import napari
 
@@ -361,6 +361,17 @@ class QtResultsViewer(QWidget):
                 'label': 'results table path',
                 'widget_type': 'FileEdit', 'mode': 'r',
                 'filter': '*.csv'
+            },
+            spline_path={
+                'label': 'spline path',
+                'widget_type': 'FileEdit',
+                'mode': 'r',
+                'filter': '*.json'
+            },
+            raw_image_path={
+                'label': 'raw image path',
+                'widget_type': 'FileEdit', 'mode': 'r',
+                'filter': '*.h5'
             }
         )
         self.image_slice_widget = QtImageSliceWidget()
@@ -376,6 +387,8 @@ class QtResultsViewer(QWidget):
         segmentation_channel: int = 3,
         sliced_image_path: str = "",
         results_table_path: str = "",
+        spline_path: str = "",
+        raw_image_path: str = "",
         pixel_size_um: float = 5.79
     ):
         self._load_slices(
@@ -383,6 +396,8 @@ class QtResultsViewer(QWidget):
             results_table_path=results_table_path,
             pixel_size_um=pixel_size_um
         )
+        self._load_spline(spline_path=spline_path)
+        self._load_raw_image(image_path=raw_image_path)
 
     def _load_slices(self, image_path: str, results_table_path: str, pixel_size_um: float):
         # load the data
@@ -418,6 +433,50 @@ class QtResultsViewer(QWidget):
             f"channel {channel_index}" for channel_index in range(n_channels)
         ]
         return stain_image, stain_channel_names
+
+    def _load_spline(self, spline_path: str):
+        # get the reader
+        reader = napari_get_reader(spline_path)
+        if reader is None:
+            raise ValueError(f"no reader found for {spline_path}")
+
+        # load the layer data
+        layer_data = reader(spline_path)[0]
+
+        # add the layer to the viewer
+        self._viewer.add_layer(Layer.create(*layer_data))
+
+        # add the slicing plane
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, _, _ = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, 0.5, 10
+        )
+        values = np.ones(4)
+        self._viewer.add_surface(data=(plane_coords, faces, values), name="slice plane")
+        self.image_slice_widget.slice_slider.valueChanged.connect(self._update_slice_plane)
+
+        # add the slicing point
+        self._viewer.add_points(data=[[0, 0, 0]], name="slice point", shading="spherical")
+
+    def _update_slice_plane(self, slice_coordinate):
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, center_position, plane_normal = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, slice_coordinate / 100, 10
+        )
+        values = np.ones(4)
+        self._viewer.layers["slice plane"].data = (plane_coords, faces, values)
+        self._viewer.layers["slice point"].data = center_position
+
+    def _load_raw_image(self, image_path: str):
+        # load the image
+        with h5py.File(image_path) as f:
+            image = f[list(f.keys())[0]][:]
+
+        # add the layer to the viewer
+        self._viewer.add_image(
+            image,
+            name="raw image"
+        )
 
 class QtUpdatedRotation(QWidget):
     def __init__(self, napari_viewer: napari.Viewer):
@@ -601,16 +660,16 @@ class QtRotationWidget(QWidget):
             self.make_copy = 1
         
         for i, chan in enumerate(self._viewer.layers.selection.active.data[:,self.ind,...]):
-            if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]:
+            if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]-1:
                 self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False, preserve_range=True)
             else:
                 self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 1, resize=False, preserve_range=True)
         self._viewer.layers.selection.active.refresh()
 
     def _apply_button(self, event=None):
-        self.current_slice = self._viewer.layers.selection.active.data[:,self.ind,...]
+        self.current_slice = self._viewer.layers.selection.active.data[:,self.ind,...].copy()
         for i, chan in enumerate(self._viewer.layers.selection.active.data[:,self.ind,...]):
-            if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]:
+            if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]-1:
                 self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False, preserve_range=True)
             else:
                 self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 1, resize=False, preserve_range=True)
@@ -765,8 +824,7 @@ def measure_boundaries(
         upper_range: float = 1,
         lower_range: float = 0,
         start_slice: int = 0,
-        end_slice: int = 99
-):
+        end_slice: int = 99):
     all_cropped_images = []
     channel_data = []
     bg_sub_profiles = []
@@ -880,8 +938,7 @@ def find_boundaries_method2(
         edge_method: BoundaryModes = BoundaryModes.PERCENT_MAX,
         edge_value: float = 0.1,
         upper_range: float = 1,
-        lower_range: float = 0,
-):
+        lower_range: float = 0,):
     ventral_boundary = []
     dorsal_boundary = []
     nt_length = []

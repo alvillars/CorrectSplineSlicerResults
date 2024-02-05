@@ -49,4 +49,4 @@ def napari_get_reader(path):
     if ".h5" in path:
         return load_any_h5_file    
     else:
-        return None
+        return None 
