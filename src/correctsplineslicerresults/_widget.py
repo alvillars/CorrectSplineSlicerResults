@@ -640,7 +640,7 @@ class QtRotationWidget(QWidget):
         self.apply_button = QPushButton(text='apply rotation')
         self.apply_button.clicked.connect(self._apply_button)
 
-        
+        # 
 
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.rotate_slider)
@@ -661,18 +661,19 @@ class QtRotationWidget(QWidget):
         
         for i, chan in enumerate(self._viewer.layers.selection.active.data[:,self.ind,...]):
             if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]-1:
-                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False, preserve_range=True)
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False)
             else:
-                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 1, resize=False, preserve_range=True)
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 2, resize=False)
         self._viewer.layers.selection.active.refresh()
 
     def _apply_button(self, event=None):
         self.current_slice = self._viewer.layers.selection.active.data[:,self.ind,...].copy()
         for i, chan in enumerate(self._viewer.layers.selection.active.data[:,self.ind,...]):
             if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]-1:
-                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False, preserve_range=True)
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self._viewer.layers.selection.active.data[i,self.ind,...], self.check_angle, order = 0, resize=False)
             else:
-                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 1, resize=False, preserve_range=True)
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self._viewer.layers.selection.active.data[i,self.ind,...], self.check_angle, order = 2, resize=False)
+        self.check_angle = 0
 
 class QtUpdatedMeasurements(QWidget):
     def __init__(self, napari_viewer: napari.Viewer):
