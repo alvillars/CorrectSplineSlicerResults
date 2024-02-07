@@ -640,11 +640,18 @@ class QtRotationWidget(QWidget):
         self.apply_button = QPushButton(text='apply rotation')
         self.apply_button.clicked.connect(self._apply_button)
 
-        # 
+        # create save button
+        self.save_rotation_widget = magicgui(
+            self._save_rotation,
+            output_path={'widget_type': 'FileEdit', 'mode': 'w', 'filter': '*.h5'},
+            call_button='save rotation'
+        )
 
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.rotate_slider)
         self.layout().addWidget(self.apply_button)
+        self.layout().addWidget(self.save_rotation_widget.native)
+
 
     def _update_slider(self, event=None):
         self.rotate_slider.setSliderPosition(0)
@@ -663,7 +670,7 @@ class QtRotationWidget(QWidget):
             if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]-1:
                 self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 0, resize=False)
             else:
-                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 2, resize=False)
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self.current_slice[i,...], self.check_angle, order = 3, resize=False)
         self._viewer.layers.selection.active.refresh()
 
     def _apply_button(self, event=None):
@@ -672,9 +679,19 @@ class QtRotationWidget(QWidget):
             if i == self._viewer.layers.selection.active.data[:,self.ind,...].shape[0]-1:
                 self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self._viewer.layers.selection.active.data[i,self.ind,...], self.check_angle, order = 0, resize=False)
             else:
-                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self._viewer.layers.selection.active.data[i,self.ind,...], self.check_angle, order = 2, resize=False)
+                self._viewer.layers.selection.active.data[i,self.ind,...] = rotate(self._viewer.layers.selection.active.data[i,self.ind,...], self.check_angle, order = 3, resize=False)
         self.check_angle = 0
 
+    def _save_rotation(self,
+        output_path: str = ""):
+        with h5py.File(output_path,'w') as f_out:
+            f_out.create_dataset(
+            'sliced_stack_rotated',
+            self._viewer.layers.selection.active.data.shape,
+            data=self._viewer.layers.selection.active.data,
+            compression='gzip'
+        )
+        
 class QtUpdatedMeasurements(QWidget):
     def __init__(self, napari_viewer: napari.Viewer):
         super().__init__()
@@ -752,7 +769,6 @@ class QtUpdatedMeasurements(QWidget):
     def _get_image_layers(self, combo_widget) -> List[Image]:
         """Get a list of Image layers in the viewer"""
         return [layer for layer in self._viewer.layers if isinstance(layer, Image)]
-
 
 def update_metadata(
     image_layer: Image,
