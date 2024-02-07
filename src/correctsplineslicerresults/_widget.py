@@ -8,9 +8,10 @@ This piece of code is for development and temporary use and is not meant as a st
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 from enum import Enum
 import h5py
+from geomdl import BSpline
 from magicgui import magicgui
 import napari
-from napari.layers import Layer, Image
+from napari.layers import Layer, Image, Shapes
 import numpy as np
 import pandas as pd
 import pyqtgraph as pg
@@ -25,7 +26,11 @@ import splineslicer
 from superqt.collapsible import QCollapsible
 from geomdl import exchange, operations
 import re
+import geomdl
 from splineslicer._reader import napari_get_reader
+from splineslicer.slice.slice_utils import calculate_rotation_matrix, create_sampling_grid
+from splineslicer.slice.slice import sample_image
+
 if TYPE_CHECKING:
     import napari
 
@@ -769,6 +774,266 @@ class QtUpdatedMeasurements(QWidget):
     def _get_image_layers(self, combo_widget) -> List[Image]:
         """Get a list of Image layers in the viewer"""
         return [layer for layer in self._viewer.layers if isinstance(layer, Image)]
+
+class QtDoubleSlider(QWidget):
+    def __init__(self, napari_viewer: napari.Viewer):
+        super().__init__()
+
+        # store the viewer
+        self._viewer = napari_viewer
+
+        # set the resolution 
+        self.slider_resolution: int = 1000
+        self.count_splines = 0
+
+        # make the load data widget
+        self.load_data_widget = magicgui(
+            self.load_data,
+            spline_path={
+                'label': 'spline path',
+                'widget_type': 'FileEdit',
+                'mode': 'r',
+                'filter': '*.json'
+            },
+            raw_image_path={
+                'label': 'raw image path',
+                'widget_type': 'FileEdit', 'mode': 'r',
+                'filter': '*.h5'
+            }
+        )
+
+
+        # create the rostral slider
+        self.rostral_slider = QLabeledSlider(Qt.Orientation.Horizontal)
+        self.rostral_slider.setRange(0, self.slider_resolution)
+        self.rostral_slider.setSliderPosition(0)
+        self.rostral_slider.setSingleStep(1)
+        self.rostral_slider.setTickInterval(1)
+
+        # create the caudal slider
+        self.caudal_slider = QLabeledSlider(Qt.Orientation.Horizontal)
+        self.caudal_slider.setRange(0, self.slider_resolution)
+        self.caudal_slider.setSliderPosition(self.slider_resolution)
+        self.caudal_slider.setSingleStep(1)
+        self.caudal_slider.setTickInterval(1)
+
+        # subspline button
+        self.subpline_button = QPushButton(text='create subspline')
+        self.subpline_button.clicked.connect(self._subspline)
+
+        self._slice_section = QCollapsible(title='slicing', parent=self)
+        self._slice_widget = magicgui(slice_it,
+            im_layer={'choices': self._get_image_layers},
+            spline_layer={'choices': self._get_spline_layers},
+            call_button='slice it')
+        self._slice_section.addWidget(self._slice_widget.native)
+        self._slice_section.addWidget(self._slice_widget.native)
+        self._viewer.layers.events.inserted.connect(
+            self._slice_widget.reset_choices
+        )
+        self._viewer.layers.events.removed.connect(
+            self._slice_widget.reset_choices
+        )
+        self._slice_widget.reset_choices()
+
+        # make the layout
+        self.setLayout(QVBoxLayout())
+        self.layout().addWidget(self.load_data_widget.native)
+        self.layout().addWidget(self.rostral_slider)
+        self.layout().addWidget(self.caudal_slider)
+        self.layout().addWidget(self.subpline_button)
+        self.layout().addWidget(self._slice_section)
+
+    def load_data(
+        self,
+        spline_path: str = "",
+        raw_image_path: str = "",
+        pixel_size_um: float = 5.79
+    ):
+        self._load_spline(spline_path=spline_path)
+        self._load_raw_image(image_path=raw_image_path)
+
+    def _load_spline(self, spline_path: str):
+        # get the reader
+        reader = napari_get_reader(spline_path)
+        if reader is None:
+            raise ValueError(f"no reader found for {spline_path}")
+
+        # load the layer data
+        layer_data = reader(spline_path)[0]
+
+        # add the layer to the viewer
+        self._viewer.add_layer(Layer.create(*layer_data))
+
+        # add the slicing plane
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, _, _ = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, 0.5, 10
+        )
+        values = np.ones(4)
+        self._viewer.add_surface(data=(plane_coords, faces, values), name="slice plane rostral", colormap='bop blue')
+        self.rostral_slider.valueChanged.connect(self._update_slice_plane_rostral)
+        self.rostral_slider.setSliderPosition(0)
+        
+        self._viewer.add_surface(data=(plane_coords, faces, values), name="slice plane caudal", colormap='bop orange')
+        self.caudal_slider.valueChanged.connect(self._update_slice_plane_caudal)
+        self.caudal_slider.setSliderPosition(1000)
+
+        # add the slicing point
+        self._viewer.add_points(data=[[0, 0, 0]], name="slice point rostral", shading="spherical", face_colormap='bop blue')
+
+        # add the slicing point
+        self._viewer.add_points(data=[[0, 0, 0]], name="slice point caudal", shading="spherical", face_colormap='bop orange')
+
+    def _update_slice_plane_rostral(self, slice_coordinate):
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, center_position, plane_normal = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, slice_coordinate / self.slider_resolution, 10
+        )
+        values = np.ones(4)
+        self._viewer.layers["slice plane rostral"].data = (plane_coords, faces, values)
+        self._viewer.layers["slice point rostral"].data = center_position
+
+    def _update_slice_plane_caudal(self, slice_coordinate):
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, center_position, plane_normal = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, slice_coordinate / self.slider_resolution, 10
+        )
+        values = np.ones(4)
+        self._viewer.layers["slice plane caudal"].data = (plane_coords, faces, values)
+        self._viewer.layers["slice point caudal"].data = center_position
+
+    def _load_raw_image(self, image_path: str):
+        # load the image
+        with h5py.File(image_path) as f:
+            image = f[list(f.keys())[0]][:]
+
+        # add the layer to the viewer
+        self._viewer.add_image(
+            image,
+            name="raw image"
+        )
+
+    def _subspline(self, event=None):
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        start = int(self.rostral_slider.value()) / self.slider_resolution
+        stop = int(self.caudal_slider.value()) / self.slider_resolution
+        spline_model.evaluate(start=start, stop=stop)
+        curve2 = BSpline.Curve()
+
+        # Set degree
+        curve2.degree = 3
+
+        # Set control points
+        curve2.ctrlpts = spline_model.evalpts # here we get 100 evalpts from the original spline, so I guess knotvector should be set to 100
+
+        # set knotvector
+        curve2.knotvector = geomdl.knotvector.generate(3,100)
+
+        curve2.delta = 0.01
+
+        self.count_splines = self.count_splines + 1
+        curve2_layer_data = (
+                curve2.ctrlpts,
+                {   'name' : 'Spline_n_'+str(self.count_splines),
+                    'shape_type': 'path',
+                    'edge_width': 0.5,
+                    'edge_color': 'green',
+                    'metadata': {'spline': curve2}
+                },
+                'shapes'
+            )
+        curve2_layer_data
+        self._viewer.add_layer(Layer.create(*curve2_layer_data))
+
+    def _get_image_layers(self, combo_widget) -> List[Image]:
+        """Get a list of Image layers in the viewer"""
+        return [layer for layer in self._viewer.layers if isinstance(layer, Image)]
+    
+    def _get_spline_layers(self, combo_widget) -> List[Shapes]:
+        """Get a list of Spline/shape layers in the viewer"""
+        return [layer for layer in self._viewer.layers if isinstance(layer, Shapes)]
+
+   
+def slice_it(
+    im_layer: Image,
+    spline_layer: Shapes,
+    n_slices: int = 100,
+    im_half_width_x: int = 150,
+    im_half_width_y: int = 150,
+    interpolation_order: int = 0) -> "napari.types.LayerDataTuple":
+    
+    sliced_images = []
+    im = im_layer.data[...]
+    spline = spline_layer.metadata["spline"]
+    slice_increment = 1 / (n_slices-1)
+    for channel_im in im:
+        sliced_im = slice_image(
+            channel_im,
+            spline=spline,
+            slice_increment=slice_increment,
+            im_half_width_x=im_half_width_x,
+            im_half_width_y=im_half_width_y,
+            order=interpolation_order
+        )
+        sliced_images.append(sliced_im)
+    im_stack = np.stack(sliced_images)
+    return (im_stack, {'name': 'output_slicing', 'colormap': 'gray'}, 'image')
+    
+def slice_image(
+    im: np.ndarray,
+    spline: BSpline,
+    slice_increment: float = 0.01,
+    im_half_width_x: int = 150,
+    im_half_width_y: int = 150,
+    order: int = 0) -> np.ndarray:
+    """
+    This is a copy of kevin's slice_image function but replacing the parametric_coords variable to include the first and last points of the spline 
+    """
+
+    # create the sample grid
+    sampling_grid = create_sampling_grid(
+        im_half_width_x=im_half_width_x,
+        im_half_width_y=im_half_width_y,
+        step_x=1,
+        step_y=1
+    )
+
+    # sampling grid was created in the YX plane
+    reference_plane_normal = [1, 0, 0]
+
+    # loop over positions and get values
+    parametric_coords = np.arange(0, 1+slice_increment/1000, slice_increment )#### /!\ here is the replacement to include 1 and not more
+    slices = []
+
+    for u in parametric_coords:
+        # for the position, find the tangent to the curve
+        tangent_data = operations.tangent(spline, u)
+        center_point = np.asarray(tangent_data[0])
+        plane_normal = np.asarray(tangent_data[1])
+
+        if np.allclose(plane_normal, reference_plane_normal):
+            rotated_coords = sampling_grid.copy()
+        else:
+            rot = calculate_rotation_matrix(reference_plane_normal, plane_normal)
+            rotated_coords = sampling_grid @ rot.T
+
+        translated_coords = rotated_coords + center_point
+
+        # sample the segmentation
+        im_slice = sample_image(
+            im,
+            transformed_sampling_grid=translated_coords,
+            original_sampling_grid=sampling_grid,
+            im_half_width_x = im_half_width_x,
+            im_half_width_y = im_half_width_y,
+            order=order
+        )
+        slices.append(im_slice)
+
+    sliced_im = np.stack(slices)
+
+    return sliced_im
 
 def update_metadata(
     image_layer: Image,
