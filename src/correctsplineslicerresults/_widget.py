@@ -862,6 +862,7 @@ class QtDoubleSlider(QWidget):
         # load the layer data
         layer_data = reader(spline_path)[0]
 
+        self.spline_path = spline_path
         # add the layer to the viewer
         self._viewer.add_layer(Layer.create(*layer_data))
 
@@ -933,6 +934,8 @@ class QtDoubleSlider(QWidget):
         curve2.delta = 0.01
 
         self.count_splines = self.count_splines + 1
+
+        self.curve2 = curve2
         curve2_layer_data = (
                 curve2.ctrlpts,
                 {   'name' : 'Spline_n_'+str(self.count_splines),
@@ -943,7 +946,10 @@ class QtDoubleSlider(QWidget):
                 },
                 'shapes'
             )
-        curve2_layer_data
+        
+        output_path = str(self.spline_path)
+        output_path = output_path.replace(".json","_subspline.json")
+        exchange.export_json(curve2, output_path)
         self._viewer.add_layer(Layer.create(*curve2_layer_data))
 
     def _get_image_layers(self, combo_widget) -> List[Image]:
