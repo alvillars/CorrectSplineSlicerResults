@@ -1122,8 +1122,9 @@ def measure_boundaries(
     targets =  image_layer.metadata.get(
             "channel_names", {}
     )
+
     # run through the 3 first channels: I should make this automatically adapt to the channel number. 
-    for k in range(0, 3):
+    for k in range(0, np.shape(image_layer.data)[0]):
         target_name = targets[k]
         print(target_name)
         stain_im = image_layer.data[k,...]
