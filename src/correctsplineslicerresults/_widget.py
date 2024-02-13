@@ -716,10 +716,10 @@ class QtUpdatedMeasurements(QWidget):
         self._update_widget = magicgui(
             update_metadata,
             image_layer={'choices': self._get_image_layers},
-            channel_0={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
-            channel_1={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
-            channel_2={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
-            channel_3={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'Unknown']},
+            channel_0={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
+            channel_1={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
+            channel_2={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
+            channel_3={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
             call_button='update metadata with channel names'
         )
         self._update_section.addWidget(self._update_widget.native)
@@ -736,10 +736,8 @@ class QtUpdatedMeasurements(QWidget):
         self._measure_widget = magicgui(
             measure_boundaries,
             image_layer={'choices': self._get_image_layers},
-            segmentation_layer={"choices": [0, 1, 2, 3, 4]},
             spline_file_path={'widget_type': 'FileEdit', 'mode': 'r', 'filter': '*.json'},
             table_output_path={'widget_type': 'FileEdit', 'mode': 'w', 'filter': '*.csv'},
-            aligned_slices_output_path={'widget_type': 'FileEdit', 'mode': 'w', 'filter': '*.h5'},
             call_button='measure image'
         )
         self._measure_section.addWidget(self._measure_widget.native)
@@ -1099,13 +1097,9 @@ def new_align_rotate(
 
 def measure_boundaries(
         image_layer: Image,
-        segmentation_layer,
         spline_file_path: str,
         table_output_path: str,
-        aligned_slices_output_path: str,
         half_width: float = 0.5,
-        bg_sample_pos: float = 0.7,
-        bg_half_width: int = 2,
         edge_method: BoundaryModes = BoundaryModes.PERCENT_MAX,
         edge_value: float = 0.5,
         pixel_size_um: float = 5.79,
@@ -1117,79 +1111,68 @@ def measure_boundaries(
     channel_data = []
     bg_sub_profiles = []
     raw_profiles = []
-    seg_im= image_layer.data[segmentation_layer,...]
+    
+    im_channels = image_layer.data
+    # seg_im= image_layer.data[-1,...]
 
     targets =  image_layer.metadata.get(
             "channel_names", {}
     )
 
     # run through the 3 first channels: I should make this automatically adapt to the channel number. 
-    for k in range(0, np.shape(image_layer.data)[0]):
-        target_name = targets[k]
-        print(target_name)
-        stain_im = image_layer.data[k,...]
-        nt_length, ventral_boundary_px, dorsal_boundary_px, bg_sub_profile, raw_profile, cropped_ims, nt_col_start, nt_col_end = find_boundaries_method2(
-                    seg_im= seg_im,
-                    stain_im= stain_im,
-                    half_width = half_width,
-                    edge_method = edge_method,
-                    edge_value = edge_value, 
-                    upper_range = upper_range,
-                    lower_range = lower_range
-            )
+    # restricts the measurements to the area that are correctly rotated and correclty segmented
+    seg_im = np.asarray(im_channels[-1, start_slice:end_slice, ...])
+    
+    channel_data = []
+    bg_sub_profiles = []
+    raw_profiles = []
 
-        all_cropped_images.append(cropped_ims)
+    # run the measurement for each channels except the last one (the segmentation one)
+    for k, chan in enumerate(im_channels[:-1]):
+        
+        # restrict measurement to current channels
+        stain_im = np.asarray(im_channels[k, start_slice:end_slice, ...])
+
+        #measure
+        
+        nt_length, ventral_boundary_px, dorsal_boundary_px, bg_sub_profile, raw_profile, cropped_ims, nt_col_start, nt_col_end = find_boundaries_method2(
+                seg_im= seg_im,
+                stain_im= stain_im,
+                half_width = half_width,
+                edge_method = edge_method,
+                edge_value = edge_value, 
+                upper_range = upper_range,
+                lower_range = lower_range
+        )
+        
+        # set the result array
         bg_sub_profiles.append(bg_sub_profile)
         raw_profiles.append(raw_profile)
-
-        pixel_size_um = 5.79
-
         nt_length = np.asarray(nt_length)
         nt_length_um = nt_length * pixel_size_um
         ventral_boundary_um = np.asarray(ventral_boundary_px) * pixel_size_um
         dorsal_boundary_um = np.asarray(dorsal_boundary_px) * pixel_size_um
-
         ventral_boundary_rel = ventral_boundary_um / nt_length_um
         dorsal_boundary_rel = dorsal_boundary_um / nt_length_um
 
+        # get spline for length measurement
         spline = exchange.import_json(spline_file_path)[0]
         spline_length = operations.length_curve(spline) * pixel_size_um
         spline_increment = spline_length / stain_im.shape[0]
+
         
         n_slices = len(nt_length_um)
-        ###################################target_name = c[i][k] ###################################
+        target_name = targets[k]
         target = [target_name] * n_slices
         threshold_list = [edge_value] * n_slices
-        slice_index = np.arange(start_slice, end_slice+1)
+        slice_index = np.arange(start_slice, end_slice)
         slice_position_um = [i * spline_increment for i in slice_index]
         slice_position_rel_um = [i * spline_increment for i in range(n_slices)]
-        
         param_measure_half_width = [half_width] * n_slices
-        param_measure_bg_sample_pos = [bg_sample_pos] * n_slices
-        param_measure_bg_half_width = [bg_half_width] * n_slices
         param_measure_edge_method = [edge_method] * n_slices
         param_measure_edge_value = [edge_value] * n_slices
 
-        print(len(slice_index),
-              len(slice_position_um), 
-              len(slice_position_rel_um),
-              len(nt_length_um),
-              len(target),
-              len(ventral_boundary_um),
-              len(dorsal_boundary_um),
-              len(ventral_boundary_rel),
-              len(dorsal_boundary_rel),
-              len(threshold_list),
-              len(nt_col_start),
-              len(nt_col_end),
-              len(ventral_boundary_px),
-              len(dorsal_boundary_px),
-              len(param_measure_half_width),
-              len(param_measure_bg_sample_pos),
-              len(param_measure_bg_half_width),
-              len(param_measure_edge_method),
-              len(param_measure_edge_value)
-              )
+        # put into a dataframe to save
         df = pd.DataFrame(
                 {
                     'slice_index': slice_index,
@@ -1207,14 +1190,26 @@ def measure_boundaries(
                     'ventral_boundary_px': ventral_boundary_px,
                     'dorsal_boundary_px': dorsal_boundary_px,
                     'param_measure_half_width': param_measure_half_width,
-                    'param_measure_bg_sample_pos': param_measure_bg_sample_pos,
-                    'param_measure_bg_half_width': param_measure_bg_half_width,
                     'param_measure_edge_method': param_measure_edge_method,
                     'param_measure_edge_value': param_measure_edge_value
                 }
             )
         channel_data.append(df)
 
+        # if target_name == 'Olig2':
+        #     for j, crop_im in enumerate(cropped_ims):
+        #         file_name = row['root_path']+'/profiles/NT_crops/'+row['File'].replace('.h5','_')+target_name+'_slice_'+str(j+start_slice)+'.jpg'
+        #         plt.ioff()
+        #         fig, axes = plt.subplots()
+        #         axes.imshow(crop_im)
+        #         ventral = ventral_boundary_px[j]
+        #         dorsal = dorsal_boundary_px[j]
+        #         axes.plot([ventral,ventral], [0,crop_im.shape[0]], 'orange')
+        #         axes.plot([dorsal,dorsal], [0,crop_im.shape[0]], 'green')
+        #         plt.savefig(file_name)
+        #         # tifffile.imwrite(file_name, ((crop_im/crop_im.max())*255).astype('uint8'))
+
+    # concatenate the data frames for the channels and save
     all_data = pd.concat(channel_data, ignore_index=True)
     all_data.to_csv(table_output_path)
 

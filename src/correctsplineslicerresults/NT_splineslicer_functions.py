@@ -263,7 +263,7 @@ def find_boundaries(
 
 def find_edge_percent_max(bg_sub_profile: np.ndarray, threshold: float) -> Tuple[int, int]:
     # find the peak index
-    peaks, _ = find_peaks(bg_sub_profile, distance=10, width=2)
+    peaks, _ = find_peaks(bg_sub_profile, distance=10)
     if len(peaks > 0):
         peak_index = np.min(peaks)
 
@@ -289,8 +289,8 @@ def find_edge_percent_max(bg_sub_profile: np.ndarray, threshold: float) -> Tuple
             increment=1
         )
     else:
-        rising_edge = np.nan
-        falling_edge = np.nan
+        rising_edge = -1
+        falling_edge = -1
 
     return rising_edge, falling_edge
 
