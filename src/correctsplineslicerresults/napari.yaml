@@ -3,26 +3,31 @@ display_name: Correction Boundary detection
 contributions:
   commands:
     - id: CorrectSplineSlicerResults.make_ResultViewer
-      python_name: correctsplineslicerresults._widget:QtResultsViewer
-      title: Make example QWidget
+      python_name: correctsplineslicerresults._dock_widget:QtResultsViewer
+      title: Correcter
+    - id: CorrectSplineSlicerResults.make_NormalsViewer
+      python_name: correctsplineslicerresults._dock_widget:QtNormalsViewer
+      title: Normals Viewer
     - id: CorrectSplineSlicerResults.make_UpdatedMeasurementWidget
-      python_name: correctsplineslicerresults._widget:QtUpdatedRotation
+      python_name: correctsplineslicerresults._dock_widget:QtUpdatedRotation
       title: Make example QWidget 
     - id: CorrectSplineSlicerResults.make_RotationWidget
-      python_name: correctsplineslicerresults._widget:QtRotationWidget
+      python_name: correctsplineslicerresults._dock_widget:QtRotationWidget
       title: Make example QWidget 
     - id: CorrectSplineSlicerResults.make_MeasurementWidget
-      python_name: correctsplineslicerresults._widget:QtUpdatedMeasurements
+      python_name: correctsplineslicerresults._dock_widget:QtUpdatedMeasurements
       title: Make example QWidget 
     - id: CorrectSplineSlicerResults.reader
       python_name: correctsplineslicerresults._reader:napari_get_reader
       title: Reader h5 files
     - id: CorrectSplineSlicerResults.make_DoubleSlider
-      python_name: correctsplineslicerresults._widget:QtDoubleSlider
+      python_name: correctsplineslicerresults._dock_widget:QtDoubleSlider
       title: Make example QWidget 
   widgets:
     - command: CorrectSplineSlicerResults.make_ResultViewer
       display_name: Correct SplineSlicer Results
+    - command: CorrectSplineSlicerResults.make_NormalsViewer
+      display_name: View Normals of the plane
     - command: CorrectSplineSlicerResults.make_UpdatedMeasurementWidget
       display_name: Updated Rotation 
     - command: CorrectSplineSlicerResults.make_RotationWidget
@@ -36,3 +41,5 @@ contributions:
       filename_patterns:
       - '*.h5'
       accepts_directories: false
+
+      
