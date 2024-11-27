@@ -475,11 +475,6 @@ class QtNormalsViewer(QWidget):
                 'label': 'raw image path',
                 'widget_type': 'FileEdit', 'mode': 'r',
                 'filter': '*.h5'
-            },
-            olig_seg_path={
-                'label': 'olig segmentation path',
-                'widget_type': 'FileEdit', 'mode': 'r',
-                'filter': '*.h5'
             }
         )
         
@@ -499,12 +494,11 @@ class QtNormalsViewer(QWidget):
     def load_data(
         self,
         spline_path: str = "",
-        raw_image_path: str = "",
-        olig_seg_path : str = ""
+        raw_image_path: str = ""
     ):
-        self._load_spline(spline_path=spline_path)
         self._load_raw_image(image_path=raw_image_path)
-        self._load_segmentation(image_path=olig_seg_path)
+        self._load_spline(spline_path=spline_path)
+        #self._load_segmentation(image_path=olig_seg_path)
 
     def _load_spline(self, spline_path: str):
         # get the reader
@@ -544,24 +538,47 @@ class QtNormalsViewer(QWidget):
         self.vector = [center_position, plane_normal]
         self._viewer.layers["normal_vector"].data = self.vector
 
+
+        plane_parameters = {
+            'position': (center_position[0], center_position[1], center_position[2]),
+            'normal': (plane_normal[0], plane_normal[1], plane_normal[2]),
+            'thickness': 10}
+
+        self._viewer.layers["plane"].plane = plane_parameters
+        
     def _load_raw_image(self, image_path: str):
         # load the image
         with h5py.File(image_path) as f:
             image = f[list(f.keys())[0]][:]
-
+        
         # add the layer to the viewer
         self._viewer.add_image(
             image,
             name="raw image"
         )
 
+        plane_parameters = {
+            'position': (32, 32, 32),
+            'normal': (1, 0, 0),
+            'thickness': 10}
+
+        self._viewer.add_image(
+            data = self._viewer.layers["raw image"].data,
+            rendering='average',
+            name='plane',
+            colormap='bop orange',
+            blending='additive',
+            opacity=0.5,
+            depiction="plane",
+            plane=plane_parameters)
+
     def _load_segmentation(self, image_path: str):
         # load the image
         with h5py.File(image_path) as f:
-            image = f[list(f.keys())[0]][0,...]
+            seg_im = f[list(f.keys())[0]][0,...]
 
         # add the layer to the viewer
         self._viewer.add_image(
-            image,
-            name="Olig2 segmentqtion"
+            seg_im,
+            name="Olig2 segmentation"
         )

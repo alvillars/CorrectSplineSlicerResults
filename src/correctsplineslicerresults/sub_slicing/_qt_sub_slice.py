@@ -6,7 +6,7 @@ from napari.layers import Layer, Image, Shapes
 import numpy as np
 import pandas as pd
 from qtpy.QtCore import Qt
-from qtpy.QtWidgets import QComboBox, QVBoxLayout, QWidget, QPushButton
+from qtpy.QtWidgets import QComboBox, QVBoxLayout, QWidget, QPushButton, QLabel, QFileDialog
 from superqt.sliders import QLabeledSlider
 from skimage.transform import rotate
 import splineslicer
@@ -202,3 +202,151 @@ class QtDoubleSlider(QWidget):
     def _get_spline_layers(self, combo_widget) -> List[Shapes]:
         """Get a list of Spline/shape layers in the viewer"""
         return [layer for layer in self._viewer.layers if isinstance(layer, Shapes)]
+
+class QtMeasureAtSomites(QWidget):
+    def __init__(self, napari_viewer: napari.Viewer):
+        super().__init__()
+
+        # store the viewer
+        self._viewer = napari_viewer
+
+        # make the load data widget
+        self.load_data_widget = magicgui(
+            self.load_data,
+            spline_path={
+                'label': 'spline path',
+                'widget_type': 'FileEdit',
+                'mode': 'r',
+                'filter': '*.json'
+            },
+            raw_image_path={
+                'label': 'raw image path',
+                'widget_type': 'FileEdit', 'mode': 'r',
+                'filter': '*.h5'
+            }
+        )
+        self.label = QLabel("No statistics computed yet.")
+
+        # create a slider to go through all slices and check the normal of the plane
+        self.slice_slider = QLabeledSlider(Qt.Orientation.Horizontal)
+        self.slice_slider.setRange(0, 99)
+        self.slice_slider.setSliderPosition(50)
+        self.slice_slider.setSingleStep(1)
+        self.slice_slider.setTickInterval(1)
+        self.slice_slider.valueChanged.connect(self._update_slice_plane)
+
+        # Create a save button
+        self.save_button = QPushButton("Save to CSV")
+        self.save_button.clicked.connect(self.save_to_csv)
+
+        # make the layout
+        self.setLayout(QVBoxLayout())
+        self.layout().addWidget(self.load_data_widget.native)
+        self.layout().addWidget(self.slice_slider)
+        self.layout().addWidget(self.label)
+        self.layout().addWidget(self.save_button)
+
+        # Initialize the list to store slider values
+        self.slider_values = []
+        @self._viewer.bind_key("m")
+        def add_slider_value(viewer):
+            value = self.slice_slider.value()
+            self.slider_values.append(value)
+            self.label.setText(f"Last recorded value: {value}")
+            # print(f"Updated slider values: {self.slider_values}")
+
+    def load_data(
+        self,
+        spline_path: str = "",
+        raw_image_path: str = ""
+    ):
+        self._load_raw_image(image_path=raw_image_path)
+        self._load_spline(spline_path=spline_path)
+        #self._load_segmentation(image_path=olig_seg_path)
+
+    def _load_spline(self, spline_path: str):
+        # get the reader
+        reader = napari_get_reader(spline_path)
+        if reader is None:
+            raise ValueError(f"no reader found for {spline_path}")
+
+        # load the layer data
+        layer_data = reader(spline_path)[0]
+
+        # add the layer to the viewer
+        self._viewer.add_layer(Layer.create(*layer_data))
+
+        # add the slicing plane
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, center_position, plane_normal = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, 0.5, 10
+        )
+        values = np.ones(4)
+        self._viewer.add_surface(data=(plane_coords, faces, values), name="slice plane")
+
+        # eval_points = []
+        # for i in range(0, 100): 
+        #     _, _, center_position, _ = splineslicer.view.results_viewer_utils.get_plane_coords(
+        #     spline_model, i/100, 10)
+        #     eval_points.append(center_position)
+        
+        # add the slicing point
+        self._viewer.add_points(data=center_position, name="slice point", shading="spherical")
+
+    def _update_slice_plane(self, slice_coordinate):
+        spline_model = self._viewer.layers["spline"].metadata["spline"]
+        plane_coords, faces, center_position, plane_normal = splineslicer.view.results_viewer_utils.get_plane_coords(
+            spline_model, slice_coordinate / 100, 10
+        )
+        values = np.ones(4)
+        self._viewer.layers["slice plane"].data = (plane_coords, faces, values)
+        self._viewer.layers["slice point"].data = center_position
+
+        plane_parameters = {
+            'position': (center_position[0], center_position[1], center_position[2]),
+            'normal': (plane_normal[0], plane_normal[1], plane_normal[2]),
+            'thickness': 10}
+
+        self._viewer.layers["plane"].plane = plane_parameters
+
+    def save_to_csv(self):
+        """Prompt user to select a directory and save the list of slider values to a CSV file."""
+        if self.slider_values:
+            # Open a file dialog to select the save location
+            file_path, _ = QFileDialog.getSaveFileName(
+                self, "Save CSV File", "", "CSV Files (*.csv)"
+            )
+            if file_path:  # If the user selected a valid path
+                df = pd.DataFrame(self.slider_values, columns=["Slider Values"])
+                df.to_csv(file_path, index=False)
+                print(f"Slider values saved to {file_path}.")
+            else:
+                print("Save operation canceled.")
+        else:
+            print("No slider values to save.")
+
+    def _load_raw_image(self, image_path: str):
+        # load the image
+        with h5py.File(image_path) as f:
+            image = f[list(f.keys())[0]][:]
+        
+        # add the layer to the viewer
+        self._viewer.add_image(
+            image,
+            name="raw image"
+        )
+
+        plane_parameters = {
+            'position': (32, 32, 32),
+            'normal': (1, 0, 0),
+            'thickness': 10}
+
+        self._viewer.add_image(
+            data = self._viewer.layers["raw image"].data,
+            rendering='average',
+            name='plane',
+            colormap='bop orange',
+            blending='additive',
+            opacity=0.5,
+            depiction="plane",
+            plane=plane_parameters)

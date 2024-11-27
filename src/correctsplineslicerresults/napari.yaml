@@ -23,6 +23,9 @@ contributions:
     - id: CorrectSplineSlicerResults.make_DoubleSlider
       python_name: correctsplineslicerresults._dock_widget:QtDoubleSlider
       title: Make example QWidget 
+    - id: CorrectSplineSlicerResults.make_SomiteMeasure
+      python_name: correctsplineslicerresults._dock_widget:QtMeasureAtSomites
+      title: Make example QWidget 
   widgets:
     - command: CorrectSplineSlicerResults.make_ResultViewer
       display_name: Correct SplineSlicer Results
@@ -36,6 +39,8 @@ contributions:
       display_name: Updated Measurement
     - command: CorrectSplineSlicerResults.make_DoubleSlider
       display_name: Double Slider
+    - command: CorrectSplineSlicerResults.make_SomiteMeasure
+      display_name: Somite Measurements
   readers:
     - command: CorrectSplineSlicerResults.reader
       filename_patterns:

@@ -20,7 +20,7 @@ from napari_plugin_engine import napari_hook_implementation
 
 from .rotate._qt_rotator import QtUpdatedRotation, QtRotationWidget
 from .view._qt_viewer import QtResultsViewer, QtNormalsViewer
-from .sub_slicing._qt_sub_slice import QtDoubleSlider
+from .sub_slicing._qt_sub_slice import QtDoubleSlider, QtMeasureAtSomites
 from .MeasurementsCorrection._qt_correct_measurement import QtUpdatedMeasurements
 
 
@@ -32,5 +32,6 @@ def napari_experimental_provide_dock_widget():
         (QtRotationWidget, {"name": "Rotation Slider"}),
         (QtUpdatedMeasurements, {"name": "Update Measurements tools"}),
         (QtDoubleSlider, {"name": "sub slicer"}),
+        (QtMeasureAtSomites, {"name": "measure at somites"}),
         (QtResultsViewer, {"name": "view results"})
     ]
