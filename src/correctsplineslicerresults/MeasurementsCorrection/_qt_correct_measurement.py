@@ -22,15 +22,18 @@ class QtUpdatedMeasurements(QWidget):
             }
         )
 
+        List_target = ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 
+                       'Pax7', 'Shh', 'Arx1', 'DAPI', 'Fgf8', 'Mesp2', 'Ngn1',
+                        'Ngn2', 'Ascl1', 'Unknown']
         # make the binarize section
         self._update_section = QCollapsible(title='1. update metadata', parent=self)
         self._update_widget = magicgui(
             update_metadata,
             image_layer={'choices': self._get_image_layers},
-            channel_0={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
-            channel_1={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
-            channel_2={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
-            channel_3={"choices": ['Olig2', 'Nkx2_2', 'Pax6', 'Laminin', 'Sox2', 'Pax7', 'Shh', 'Arx1', 'DAPI', 'Unknown']},
+            channel_0={"choices": List_target},
+            channel_1={"choices": List_target},
+            channel_2={"choices": List_target},
+            channel_3={"choices": List_target},
             call_button='update metadata with channel names'
         )
         self._update_section.addWidget(self._update_widget.native)

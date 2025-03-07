@@ -225,7 +225,8 @@ class QtMeasureAtSomites(QWidget):
                 'filter': '*.h5'
             }
         )
-        self.label = QLabel("No statistics computed yet.")
+        self.Slice_value_label = QLabel("No sliced measured yet.")
+        self.Somite_value_label = QLabel("No somite position yet.")
 
         # create a slider to go through all slices and check the normal of the plane
         self.slice_slider = QLabeledSlider(Qt.Orientation.Horizontal)
@@ -243,7 +244,8 @@ class QtMeasureAtSomites(QWidget):
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.load_data_widget.native)
         self.layout().addWidget(self.slice_slider)
-        self.layout().addWidget(self.label)
+        self.layout().addWidget(self.Slice_value_label)
+        self.layout().addWidget(self.Somite_value_label)
         self.layout().addWidget(self.save_button)
 
         # Initialize the list to store slider values
@@ -252,7 +254,8 @@ class QtMeasureAtSomites(QWidget):
         def add_slider_value(viewer):
             value = self.slice_slider.value()
             self.slider_values.append(value)
-            self.label.setText(f"Last recorded value: {value}")
+            self.Slice_value_label.setText(f"Last recorded value: {value}")
+            self.Somite_value_label.setText(f"Last recorded somite: {len(self.slider_values)+6}")
             # print(f"Updated slider values: {self.slider_values}")
 
     def load_data(

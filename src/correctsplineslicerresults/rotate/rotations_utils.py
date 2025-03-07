@@ -94,6 +94,25 @@ def calculate_slice_rotations(im_stack: np.ndarray, im_stack_chan: np.ndarray, m
             x2 = x0 + math.sin(orientation) * p * rp[0].axis_major_length
             y2 = y0 + math.cos(orientation) * p * rp[0].axis_major_length
 
+            if x1 <0:
+                x1 = 0
+            if y1 <0: 
+                y1 = 0
+            if x1 > 300:
+                x1 = 300
+            if y1 > 300: 
+                y1 = 300
+
+            if x2 <0:
+                x2 = 0
+            if y2 <0: 
+                y2 = 0
+
+            if x2 > 300:
+                x2 = 300
+            if y2 > 300: 
+                y2 = 300
+                
             length = int(np.hypot(x1-x2, y1-y2))
             x, y = np.linspace(x1, x2, length), np.linspace(y1, y2, length)
             pos.append([x1,y1,x2,y2])

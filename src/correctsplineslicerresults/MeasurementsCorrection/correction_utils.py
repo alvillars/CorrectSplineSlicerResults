@@ -181,6 +181,9 @@ def find_boundaries_method2(
         lim_up = round(upper_range*len(bg_sub_profile))
         lim_down = round(lower_range*len(bg_sub_profile))
         search_profile = bg_sub_profile[lim_down:lim_up]
+        arr_min = np.min(search_profile)
+        arr_max = np.max(search_profile)
+        search_profile = (search_profile - arr_min) / (arr_max - arr_min)
 
         if isinstance(edge_method, str):
             edge_method = BoundaryModes(edge_method)
